@@ -24,7 +24,7 @@
 
 // #############################################
 // #############################################
-
+#define a                           0x01
 #define REG_FIFO                    0x00
 #define REG_OPMODE                  0x01
 #define REG_FIFO_ADDR_PTR           0x0D
