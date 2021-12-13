@@ -332,10 +332,13 @@ boolean receive(char *payload) {
     return true;
 }
 
-void receivepacket() {
+void receivepacket(double own_lat, double own_lon) {
 
-    long int SNR;
+    long int SNR, RSSI;
     int rssicorr;
+    double lat, lon;
+    char *next;
+    FILE *data
 
     if(digitalRead(dio0) == 1)
     {
@@ -358,13 +361,34 @@ void receivepacket() {
             } else {
                 rssicorr = 157;
             }
+            RSSI = readReg(0x1B) - rssicorr;
 
+            // TODO Do we use packet RSSI or just "RSSI"?
             printf("Packet RSSI: %d, ", readReg(0x1A)-rssicorr);
-            printf("RSSI: %d, ", readReg(0x1B)-rssicorr);
+            printf("RSSI: %d, ", RSSI);
             printf("SNR: %li, ", SNR);
             printf("Length: %i", (int)receivedbytes);
             printf("\n");
             printf("Payload: %s\n", message);
+
+            lat = strtod(message, &next);
+            if (errno == ERANGE) {
+                printf("WARNING: bad latitude from sender!\n");
+                return;
+            }
+
+            lon = strtod(next, NULL);
+            if (errno == ERANGE) {
+                printf("WARNING: bad longitude from sender!\n");
+                return;
+            }
+
+            printf("Got latitude %f and longitude %f from sender\n", lat, lon);
+
+            // TODO specify or generate dynamic file name
+            data = fopen("data.dat", "a");
+            fprintf(data, "%f %f %f %f %d %li\n", own_lat, own_lon, lat, lon, RSSI, SNR);
+            fclose(data);
 
         } // received a message
 
@@ -477,15 +501,16 @@ int main (int argc, char *argv[]) {
         printf("------------------\n");
 
         while(1) {
+            delay(5000);
             if (argc == 2) {
                 err = gps_get_position(&lat, &lon);
                 if (err != 0) {
-                    printf("WARNING: gps_get_position returned %d\n", err);
+                    printf("ERROR: gps_get_position returned %d\n", err);
+                    continue;
                 }
                 snprintf((char *)hello, sizeof(hello), "%f %f", lat, lon);
             }
             txlora(hello, strlen((char *)hello));
-            delay(5000);
         }
     } else {
 
@@ -496,8 +521,18 @@ int main (int argc, char *argv[]) {
         printf("Listening at SF%i on %.6lf Mhz.\n", sf,(double)freq/1000000);
         printf("------------------\n");
         while(1) {
-            receivepacket(); 
             delay(1);
+            // TODO Is it OK if the receiver waits for its own GPS data like this, or
+            // will that make it too inresponsive to GPS data sent from sender?
+            if (argc == 2) {
+                err = gps_get_position(&lat, &lon);
+                if (err != 0) {
+                    printf("ERROR: gps_get_position returned %d\n", err);
+                    continue;
+                }
+                snprintf((char *)hello, sizeof(hello), "%f %f", lat, lon);
+            }
+            receivepacket(lat, lon);
         }
 
     }
