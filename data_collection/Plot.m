@@ -29,7 +29,7 @@ else
     packet_strength= rssi_avg
 end
 
-
+figure(1);
 avg_power = packet_strength
 xdata = distance_avg(:)
 ydata = avg_power
@@ -39,7 +39,12 @@ cf = fit(xdata,ydata,'poly2');
 hold on
 plot(cf,'-')
 
-Ldb = avg_power - avg_power(1)
+%RSSI(avg_power) = init_power +gain − Ldb +gain dBm.
+%Ldb = init_power +gain -RSSI(avg_power)+gain 
+init_power = 13
+gain = 15
+transmit_power = init_power+gain
+Ldb = transmit_power - avg_power -gain
 plot(xdata,Ldb,'--')
 
 legend('Power','Best Fit','Path Lost')
@@ -47,7 +52,7 @@ xlabel('Distance(Meters)'), ylabel('Power(dbm)')
 title('Free Space Path Lost Against Distance')
 
 out = gca;
-exportgraphics(out,'result/graph/graph.png','Resolution',300)
+exportgraphics(out,'result/graph/distance_power.png','Resolution',300)
 
 %Equition Solver for N
 %n = (20*log(f)-147.58 - Ldb)/10 /log(distance)
@@ -69,9 +74,18 @@ fprintf(fileID,'%6s %6s\n','distance_avg','n_avg');
 fprintf(fileID,'%7.2f %10.2f\n',out);
 fprintf(fileID,'\nn = %2.2f \n',n_avg)
 fprintf(fileID,'Path Loss Model: Ldb = 20*log(f)+10*%0.2f*log(d) + -147.58   \n',n_avg);
-
-
 fclose(fileID);
 
+figure(2);
+receive_power = transmit_power-Ldb
+rssi_lst = receive_power+gain
+rssi = rssi_lst(1)
+path=[init_power,init_power,init_power,transmit_power,receive_power(1),rssi,rssi]
+plot(xdata,path)
+legend('Power')
+xlabel('Distance(Meters)'), ylabel('Power(dbm)')
+title('Power Change Along the Path')
+out = gca;
+exportgraphics(out,'result/graph/power_path.png','Resolution',300)
 
 

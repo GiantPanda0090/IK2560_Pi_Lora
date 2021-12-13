@@ -3,6 +3,8 @@ rssi=double.empty(7,0);
 snr=double.empty(7,0);
 dist=double.empty(7,0);
 n_list=double.empty(1,0);
+packet_rssi=double.empty(7,0);
+
 
 %plot operations
 files = dir('..\data\data_*.dat');
@@ -12,7 +14,7 @@ for i=1:length(files)
     latitude=current_file(:,4);
     initialx = current_file(:,1);
     initialy = current_file(:,2);
-    dist = distance(initialx,initialy,latitude,longitude)
+    dist = [dist,distance(initialx,initialy,latitude,longitude)]
     rssi=[rssi,current_file(:,5)];
     packet_rssi = [packet_rssi,current_file(:,6)];
     snr=[snr,current_file(:,7)];
@@ -27,7 +29,7 @@ else
     packet_strength= rssi_avg
 end
 
-
+figure(1);
 avg_power = packet_strength
 xdata = distance_avg(:)
 ydata = avg_power
@@ -37,7 +39,12 @@ cf = fit(xdata,ydata,'poly2');
 hold on
 plot(cf,'-')
 
-Ldb = avg_power - avg_power(1)
+%RSSI(avg_power) = init_power +gain − Ldb +gain dBm.
+%Ldb = init_power +gain -RSSI(avg_power)+gain 
+init_power = 13
+gain = 15
+transmit_power = init_power+gain
+Ldb = transmit_power - avg_power -gain
 plot(xdata,Ldb,'--')
 
 legend('Power','Best Fit','Path Lost')
@@ -67,9 +74,12 @@ fprintf(fileID,'%6s %6s\n','distance_avg','n_avg');
 fprintf(fileID,'%7.2f %10.2f\n',out);
 fprintf(fileID,'\nn = %2.2f \n',n_avg)
 fprintf(fileID,'Path Loss Model: Ldb = 20*log(f)+10*%0.2f*log(d) + -147.58   \n',n_avg);
-
-
 fclose(fileID);
+
+figure(2);
+receive_power = transmit_power-Ldb
+RSSI = receive_power+gain
+path=[init_power,init_power,init_power,init_power,transmit_power,receive_power(1,RSSI,RSSI,RSSI,RSSI]
 
 
 
