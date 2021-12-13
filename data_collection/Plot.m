@@ -1,28 +1,34 @@
 %init variables
 rssi=double.empty(7,0);
 snr=double.empty(7,0);
-distance=double.empty(7,0);
+dist=double.empty(7,0);
 n_list=double.empty(1,0);
+packet_rssi=double.empty(7,0);
+
 
 %plot operations
 files = dir('..\data\data_*.dat');
 for i=1:length(files)
     current_file = load(strcat(files(i).folder,'\',files(i).name), '-ascii')
-    longitude=current_file(:,1);
-    latitude=current_file(:,2);
-    initialx = longitude(1)
-    initialy = latitude(1)
-    distance = [distance,sqrt((longitude - initialx(1)).^2 + (latitude - initialy(1)).^2)]
-    rssi=[rssi,current_file(:,3)];
-    snr=[snr,current_file(:,4)];
+    longitude=current_file(:,3);
+    latitude=current_file(:,4);
+    initialx = current_file(:,1);
+    initialy = current_file(:,2);
+    dist = [dist,distance(initialx,initialy,latitude,longitude)]
+    rssi=[rssi,current_file(:,5)];
+    packet_rssi = [packet_rssi,current_file(:,6)];
+    snr=[snr,current_file(:,7)];
 end
+packet_rssi_avg= mean(packet_rssi,2)
 rssi_avg= mean(rssi,2)
 snr_avg= mean(snr,2)
-hf_constant = -157
-lf_constant = -164
-rssi_dbm = hf_constant + rssi_avg
-distance_avg = mean(distance,2)
-packet_strength= rssi_dbm + snr_avg * 0.25
+distance_avg = mean(dist,2)
+if snr_avg < 0
+    packet_strength= packet_rssi_avg + snr_avg * 0.25
+else 
+    packet_strength= rssi_avg
+end
+
 
 avg_power = packet_strength
 xdata = distance_avg(:)
