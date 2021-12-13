@@ -6,7 +6,7 @@
  *
  *******************************************************************************/
 
-#include <string>
+#include <string.h>
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -15,11 +15,14 @@
 #include <sys/time.h>
 #include <signal.h>
 #include <stdlib.h>
+#include <errno.h>
 
 #include <sys/ioctl.h>
 
 #include <wiringPi.h>
 #include <wiringPiSPI.h>
+
+#include "gps_api.h"
 
 
 // #############################################
@@ -426,9 +429,11 @@ void txlora(byte *frame, byte datalen) {
 }
 
 int main (int argc, char *argv[]) {
-
-    if (argc < 2) {
-        printf ("Usage: argv[0] sender|rec [message]\n");
+    int err;
+    double lat, lon;
+    if (argc < 2 || argc != 4 ) {
+        printf ("Usage: argv[0] sender|rec [latitude] [longitude]\n");
+        printf ("If latitude and longitude is not given, the GPS will be used to dynamically obtain them.\n");
         exit(1);
     }
 
@@ -440,6 +445,24 @@ int main (int argc, char *argv[]) {
     wiringPiSPISetup(CHANNEL, 500000);
 
     SetupLoRa();
+
+    if (argc == 4) {
+        lat = strtod(argv[2], NULL);
+        if (errno == ERANGE)
+            die("ERROR: latitude could not be interpreted!\n");
+
+        lon = strtod(argv[3], NULL);
+        if (errno == ERANGE)
+            die("ERROR: longitude could not be interpreted!\n");
+
+        printf("using static latitude %f and longitude %f\n", lat, lon);
+        snprintf((char *)hello, sizeof(hello), "%f %f", lat, lon);
+    } else {
+        err = gps_start();
+        if (err != 0) {
+            die("ERROR: gps_start returned %d\n", err);
+        }
+    }
 
     if (!strcmp("sender", argv[1])) {
         opmodeLora();
@@ -453,10 +476,14 @@ int main (int argc, char *argv[]) {
         printf("Send packets at SF%i on %.6lf Mhz.\n", sf,(double)freq/1000000);
         printf("------------------\n");
 
-        if (argc > 2)
-            strncpy((char *)hello, argv[2], sizeof(hello));
-
         while(1) {
+            if (argc == 2) {
+                err = gps_get_position(&lat, &lon);
+                if (err != 0) {
+                    printf("WARNING: gps_get_position returned %d\n", err);
+                }
+                snprintf((char *)hello, sizeof(hello), "%f %f", lat, lon);
+            }
             txlora(hello, strlen((char *)hello));
             delay(5000);
         }
@@ -474,6 +501,8 @@ int main (int argc, char *argv[]) {
         }
 
     }
+    // Stop the GPS in case it was started
+    (void) gps_stop();
 
     return (0);
 }
