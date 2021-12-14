@@ -54,7 +54,7 @@ plot(xdata,Ldb,'--')
 
 legend('Power','Best Fit','Path Lost')
 xlabel('Distance(Meters)'), ylabel('Power(dbm)')
-title('Path Lost Against Distance')
+title('Power Against Distance')
 
 out = gca;
 exportgraphics(out,'result/graph/distance_power.png','Resolution',300)
@@ -93,7 +93,7 @@ C = categorical(x_path)
 
 plot(C,path)
 xlabel('Stage of the Transmission'), ylabel('Power(dbm)')
-title('Power Change Along the Radio Path Per Distance Unit')
+title('Power Development Along the Radio Path Per Distance Unit')
 out = gca;
 exportgraphics(out,'result/graph/power_path.png','Resolution',500)
 
