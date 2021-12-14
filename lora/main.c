@@ -531,10 +531,9 @@ int main (int argc, char *argv[]) {
         t = time(NULL);
         now = localtime(&t);
         if (now == NULL) {
-            printf("ERROR: localtime failed with errno %d\n", errno);
-            exit(errno);
+            die("ERROR: localtime failed with errno %d\n", errno);
         }
-        snprintf((char *)filename, sizeof(filename), "data_%04d%02d%02d_%02d%02d%02d.dat",
+        snprintf((char *)filename, sizeof(filename), "../data/data_%04d%02d%02d_%02d%02d%02d.dat",
                  now->tm_tear + 1900, now->tm_mon + 1, now->tm_mday, now->tm_hour, now->tm_min, now->tm_sec);
 
         printf("Listening at SF%i on %.6lf Mhz.\n", sf,(double)freq/1000000);
