@@ -305,8 +305,9 @@ void SetupLoRa()
 
 }
 
-boolean receive(char *payload) {
+boolean receive(char *payload, int maxlen) {
     // clear rxDone
+    int i;
     writeReg(REG_IRQ_FLAGS, 0x40);
 
     int irqflags = readReg(REG_IRQ_FLAGS);
@@ -321,14 +322,17 @@ boolean receive(char *payload) {
 
         byte currentAddr = readReg(REG_FIFO_RX_CURRENT_ADDR);
         byte receivedCount = readReg(REG_RX_NB_BYTES);
+        if (maxlen < receivedCount)
+            receivedCount = maxlen;
         receivedbytes = receivedCount;
 
         writeReg(REG_FIFO_ADDR_PTR, currentAddr);
 
-        for(int i = 0; i < receivedCount; i++)
+        for(i = 0; i < receivedCount; i++)
         {
             payload[i] = (char)readReg(REG_FIFO);
         }
+        payload[i] = '\0';
     }
     return true;
 }
@@ -343,7 +347,7 @@ void receivepacket(double own_lat, double own_lon) {
 
     if(digitalRead(dio0) == 1)
     {
-        if(receive(message)) {
+        if(receive(message, sizeof(message) - 1)) {
             byte value = readReg(REG_PKT_SNR_VALUE);
             if( value & 0x80 ) // The SNR sign bit is 1
             {
@@ -365,6 +369,7 @@ void receivepacket(double own_lat, double own_lon) {
             RSSI = readReg(0x1B) - rssicorr;
             pktRSSI = readReg(0x1A)-rssicorr;
 
+            printf("\n");
             printf("Packet RSSI: %d, ", pktRSSI);
             printf("RSSI: %d, ", RSSI);
             printf("SNR: %li, ", SNR);
@@ -373,14 +378,14 @@ void receivepacket(double own_lat, double own_lon) {
             printf("Payload: %s\n", message);
 
             lat = strtod(message, &next);
-            if (errno == ERANGE) {
-                printf("WARNING: bad latitude from sender!\n");
+            if (lat == 0 && errno != 0) {
+                printf("WARNING: bad latitude, strtod returned %d!\n", errno);
                 return;
             }
 
             lon = strtod(next, NULL);
-            if (errno == ERANGE) {
-                printf("WARNING: bad longitude from sender!\n");
+            if (lon == 0 && errno != 0) {
+                printf("WARNING: bad longitude, strod returned %d!\n", errno);
                 return;
             }
 
@@ -464,7 +469,7 @@ int main (int argc, char *argv[]) {
     struct tm *now;
 
     if (argc != 2 && argc != 4 ) {
-        printf ("Usage: argv[0] sender|rec [latitude] [longitude]\n");
+        printf ("Usage: %s sender|rec [latitude] [longitude]\n", argv[0]);
         printf ("If latitude and longitude is not given, the GPS will be used to dynamically obtain them.\n");
         exit(1);
     }
