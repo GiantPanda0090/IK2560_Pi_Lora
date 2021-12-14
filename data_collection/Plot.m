@@ -54,7 +54,7 @@ plot(xdata,Ldb,'--')
 
 legend('Power','Best Fit','Path Lost')
 xlabel('Distance(Meters)'), ylabel('Power(dbm)')
-title('Free Space Path Lost Against Distance')
+title('Path Lost Against Distance')
 
 out = gca;
 exportgraphics(out,'result/graph/distance_power.png','Resolution',300)
