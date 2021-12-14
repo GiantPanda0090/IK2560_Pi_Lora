@@ -1,19 +1,23 @@
-%init variables
-rssi=double.empty(7,0);
-snr=double.empty(7,0);
-dist=double.empty(7,0);
-n_list=double.empty(1,0);
-packet_rssi=double.empty(7,0);
 
+files = dir('..\data\data_*.dat');
+data_length=length(load(strcat(files(1).folder,'\',files(1).name), '-ascii'))
+%init variables
+rssi=double.empty(data_length,0);
+snr=double.empty(data_length,0);
+dist=double.empty(data_length,0);
+n_list=double.empty(1,0);
+packet_rssi=double.empty(data_length,0);
+path=double.empty(data_length,0);
 
 %plot operations
-files = dir('..\data\data_*.dat');
 for i=1:length(files)
     current_file = load(strcat(files(i).folder,'\',files(i).name), '-ascii')
     longitude=current_file(:,3);
     latitude=current_file(:,4);
     initialx = current_file(:,1);
     initialy = current_file(:,2);
+
+
     dist = [dist,distance(initialx,initialy,latitude,longitude)]
     rssi=[rssi,current_file(:,5)];
     packet_rssi = [packet_rssi,current_file(:,6)];
@@ -77,15 +81,16 @@ fprintf(fileID,'Path Loss Model: Ldb = 20*log(f)+10*%0.2f*log(d) + -147.58   \n'
 fclose(fileID);
 
 figure(2);
-receive_power = transmit_power-Ldb
-rssi_lst = receive_power+gain
-rssi = rssi_lst(1)
-path=[init_power,init_power,init_power,transmit_power,receive_power(1),rssi,rssi]
+receive_power_lst = transmit_power-Ldb
+rssi_lst = receive_power_lst+gain
+for i=1:data_length
+    cur_path=[init_power;init_power;init_power;transmit_power;receive_power_lst(i);rssi_lst(i);rssi_lst(i)];
+    path = [path,cur_path];
+end
 plot(xdata,path)
-legend('Power')
 xlabel('Distance(Meters)'), ylabel('Power(dbm)')
 title('Power Change Along the Path')
 out = gca;
-exportgraphics(out,'result/graph/power_path.png','Resolution',300)
+exportgraphics(out,'result/graph/power_path.png','Resolution',500)
 
 
