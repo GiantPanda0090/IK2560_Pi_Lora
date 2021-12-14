@@ -1,5 +1,6 @@
 
-files = dir('..\data\data_*.dat');
+files = dir(['..' filesep 'data' filesep 'data_*.dat'])
+%dir('..\data\data_*.dat');
 data_length=length(load(strcat(files(1).folder,'\',files(1).name), '-ascii'))
 %init variables
 rssi=double.empty(data_length,0);
@@ -60,7 +61,7 @@ exportgraphics(out,'result/graph/distance_power.png','Resolution',300)
 
 %Equition Solver for N
 %n = (20*log(f)-147.58 - Ldb)/10 /log(distance)
-f = 868*10^6
+f =  868.1*10^6
 syms n
 for i=2:length(distance_avg)
 eqn = 20*log(f)+10*n*log(distance_avg(i)) + -147.58 == Ldb(i)
@@ -84,12 +85,15 @@ figure(2);
 receive_power_lst = transmit_power-Ldb
 rssi_lst = receive_power_lst+gain
 for i=1:data_length
-    cur_path=[init_power;init_power;init_power;transmit_power;receive_power_lst(i);rssi_lst(i);rssi_lst(i)];
+    cur_path=[init_power;transmit_power;receive_power_lst(i);rssi_lst(i)];
     path = [path,cur_path];
 end
-plot(xdata,path)
-xlabel('Distance(Meters)'), ylabel('Power(dbm)')
-title('Power Change Along the Path')
+x_path = {'1 - TX Radio','2 - PA','3 - Path Lost','4 - RSSI'}
+C = categorical(x_path)
+
+plot(C,path)
+xlabel('Stage of the Transmission'), ylabel('Power(dbm)')
+title('Power Change Along the Radio Path Per Distance Unit')
 out = gca;
 exportgraphics(out,'result/graph/power_path.png','Resolution',500)
 
