@@ -3,7 +3,7 @@
 
 CC=g++
 CFLAGS=-c -Wall
-LIBS=-lwiringPi -lgps
+LIBS=-lwiringPi -lgps -lm
 
 all: dragino_lora_app
 
