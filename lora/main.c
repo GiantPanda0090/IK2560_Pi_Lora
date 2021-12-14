@@ -463,7 +463,7 @@ int main (int argc, char *argv[]) {
     time_t t;
     struct tm *now;
 
-    if (argc < 2 || argc != 4 ) {
+    if (argc != 2 && argc != 4 ) {
         printf ("Usage: argv[0] sender|rec [latitude] [longitude]\n");
         printf ("If latitude and longitude is not given, the GPS will be used to dynamically obtain them.\n");
         exit(1);
