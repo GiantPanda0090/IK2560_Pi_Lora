@@ -6,7 +6,7 @@
  *
  *******************************************************************************/
 
-#include <string>
+#include <string.h>
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -15,11 +15,15 @@
 #include <sys/time.h>
 #include <signal.h>
 #include <stdlib.h>
+#include <errno.h>
+#include <time.h>
 
 #include <sys/ioctl.h>
 
 #include <wiringPi.h>
 #include <wiringPiSPI.h>
+
+#include "gps_api.h"
 
 
 // #############################################
@@ -149,6 +153,7 @@ typedef unsigned char byte;
 static const int CHANNEL = 0;
 
 char message[256];
+char filename[256];
 
 bool sx1272 = true;
 
@@ -230,7 +235,6 @@ static void opmodeLora() {
 
 void SetupLoRa()
 {
-    
     digitalWrite(RST, HIGH);
     delay(100);
     digitalWrite(RST, LOW);
@@ -329,10 +333,13 @@ boolean receive(char *payload) {
     return true;
 }
 
-void receivepacket() {
+void receivepacket(double own_lat, double own_lon) {
 
     long int SNR;
-    int rssicorr;
+    int rssicorr, RSSI, pktRSSI;
+    double lat, lon;
+    char *next;
+    FILE *data;
 
     if(digitalRead(dio0) == 1)
     {
@@ -349,19 +356,44 @@ void receivepacket() {
                 // Divide by 4
                 SNR = ( value & 0xFF ) >> 2;
             }
-            
+
             if (sx1272) {
                 rssicorr = 139;
             } else {
                 rssicorr = 157;
             }
+            RSSI = readReg(0x1B) - rssicorr;
+            pktRSSI = readReg(0x1A)-rssicorr;
 
-            printf("Packet RSSI: %d, ", readReg(0x1A)-rssicorr);
-            printf("RSSI: %d, ", readReg(0x1B)-rssicorr);
+            printf("Packet RSSI: %d, ", pktRSSI);
+            printf("RSSI: %d, ", RSSI);
             printf("SNR: %li, ", SNR);
             printf("Length: %i", (int)receivedbytes);
             printf("\n");
             printf("Payload: %s\n", message);
+
+            lat = strtod(message, &next);
+            if (errno == ERANGE) {
+                printf("WARNING: bad latitude from sender!\n");
+                return;
+            }
+
+            lon = strtod(next, NULL);
+            if (errno == ERANGE) {
+                printf("WARNING: bad longitude from sender!\n");
+                return;
+            }
+
+            printf("Got latitude %f and longitude %f from sender\n", lat, lon);
+
+            // TODO specify or generate dynamic file name
+            data = fopen(filename, "a");
+            if (data == NULL) {
+                printf("WARNING: opening data file failed with error %d!\n", errno);
+                return;
+            }
+            fprintf(data, "%f %f %f %f %d %d %li\n", own_lat, own_lon, lat, lon, RSSI, pktRSSI, SNR);
+            fclose(data);
 
         } // received a message
 
@@ -426,9 +458,14 @@ void txlora(byte *frame, byte datalen) {
 }
 
 int main (int argc, char *argv[]) {
+    int err;
+    double lat, lon;
+    time_t t;
+    struct tm *now;
 
-    if (argc < 2) {
-        printf ("Usage: argv[0] sender|rec [message]\n");
+    if (argc != 2 && argc != 4 ) {
+        printf ("Usage: argv[0] sender|rec [latitude] [longitude]\n");
+        printf ("If latitude and longitude is not given, the GPS will be used to dynamically obtain them.\n");
         exit(1);
     }
 
@@ -440,6 +477,25 @@ int main (int argc, char *argv[]) {
     wiringPiSPISetup(CHANNEL, 500000);
 
     SetupLoRa();
+
+    if (argc == 4) {
+        lat = strtod(argv[2], NULL);
+        if (errno == ERANGE)
+            die("ERROR: latitude could not be interpreted!\n");
+
+        lon = strtod(argv[3], NULL);
+        if (errno == ERANGE)
+            die("ERROR: longitude could not be interpreted!\n");
+
+        printf("using static latitude %f and longitude %f\n", lat, lon);
+        snprintf((char *)hello, sizeof(hello), "%f %f", lat, lon);
+    } else {
+        err = gps_start();
+        if (err != 0) {
+            printf("ERROR: gps_start returned %d\n", err);
+            exit(1);
+        }
+    }
 
     if (!strcmp("sender", argv[1])) {
         opmodeLora();
@@ -453,12 +509,17 @@ int main (int argc, char *argv[]) {
         printf("Send packets at SF%i on %.6lf Mhz.\n", sf,(double)freq/1000000);
         printf("------------------\n");
 
-        if (argc > 2)
-            strncpy((char *)hello, argv[2], sizeof(hello));
-
         while(1) {
-            txlora(hello, strlen((char *)hello));
             delay(5000);
+            if (argc == 2) {
+                err = gps_get_position(&lat, &lon);
+                if (err != 0) {
+                    printf("ERROR: gps_get_position returned %d\n", err);
+                    continue;
+                }
+                snprintf((char *)hello, sizeof(hello), "%f %f", lat, lon);
+            }
+            txlora(hello, strlen((char *)hello));
         }
     } else {
 
@@ -466,14 +527,36 @@ int main (int argc, char *argv[]) {
         opmodeLora();
         opmode(OPMODE_STANDBY);
         opmode(OPMODE_RX);
+
+        t = time(NULL);
+        now = localtime(&t);
+        if (now == NULL) {
+            printf("ERROR: localtime failed with errno %d\n", errno);
+            exit(1);
+        }
+        snprintf((char *)filename, sizeof(filename), "../data/data_%04d%02d%02d_%02d%02d%02d.dat",
+                 now->tm_year + 1900, now->tm_mon + 1, now->tm_mday, now->tm_hour, now->tm_min, now->tm_sec);
+
         printf("Listening at SF%i on %.6lf Mhz.\n", sf,(double)freq/1000000);
         printf("------------------\n");
         while(1) {
-            receivepacket(); 
             delay(1);
+            // TODO Is it OK if the receiver waits for its own GPS data like this, or
+            // will that make it too inresponsive to GPS data sent from sender?
+            if (argc == 2) {
+                err = gps_get_position(&lat, &lon);
+                if (err != 0) {
+                    printf("ERROR: gps_get_position returned %d\n", err);
+                    continue;
+                }
+                snprintf((char *)hello, sizeof(hello), "%f %f", lat, lon);
+            }
+            receivepacket(lat, lon);
         }
 
     }
+    // Stop the GPS in case it was started
+    (void) gps_stop();
 
     return (0);
 }

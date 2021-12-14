@@ -3,15 +3,15 @@
 
 CC=g++
 CFLAGS=-c -Wall
-LIBS=-lwiringPi
+LIBS=-lwiringPi -lgps
 
 all: dragino_lora_app
 
-dragino_lora_app: main.o
-	$(CC) main.o  $(LIBS) -o dragino_lora_app
+dragino_lora_app: main.o gps_api.o
+	$(CC) main.o  gps_api.o $(LIBS) -o lora_workbench
 
-main.o: main.c
-	$(CC) $(CFLAGS) main.c
+main.o: main.c gps_api.c
+	$(CC) $(CFLAGS) main.c gps_api.c
 
 clean:
-	rm *.o dragino_lora_app	
+	rm *.o lora_workbench
