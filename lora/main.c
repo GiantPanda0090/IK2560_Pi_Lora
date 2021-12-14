@@ -235,7 +235,6 @@ static void opmodeLora() {
 
 void SetupLoRa()
 {
-    
     digitalWrite(RST, HIGH);
     delay(100);
     digitalWrite(RST, LOW);
@@ -336,11 +335,11 @@ boolean receive(char *payload) {
 
 void receivepacket(double own_lat, double own_lon) {
 
-    long int SNR, RSSI;
-    int rssicorr;
+    long int SNR;
+    int rssicorr, RSSI, pktRSSI;
     double lat, lon;
     char *next;
-    FILE *data
+    FILE *data;
 
     if(digitalRead(dio0) == 1)
     {
@@ -357,7 +356,7 @@ void receivepacket(double own_lat, double own_lon) {
                 // Divide by 4
                 SNR = ( value & 0xFF ) >> 2;
             }
-            
+
             if (sx1272) {
                 rssicorr = 139;
             } else {
@@ -462,7 +461,7 @@ int main (int argc, char *argv[]) {
     int err;
     double lat, lon;
     time_t t;
-    struct tm now;
+    struct tm *now;
 
     if (argc < 2 || argc != 4 ) {
         printf ("Usage: argv[0] sender|rec [latitude] [longitude]\n");
@@ -493,7 +492,8 @@ int main (int argc, char *argv[]) {
     } else {
         err = gps_start();
         if (err != 0) {
-            die("ERROR: gps_start returned %d\n", err);
+            printf("ERROR: gps_start returned %d\n", err);
+            exit(1);
         }
     }
 
@@ -531,10 +531,11 @@ int main (int argc, char *argv[]) {
         t = time(NULL);
         now = localtime(&t);
         if (now == NULL) {
-            die("ERROR: localtime failed with errno %d\n", errno);
+            printf("ERROR: localtime failed with errno %d\n", errno);
+            exit(1);
         }
         snprintf((char *)filename, sizeof(filename), "../data/data_%04d%02d%02d_%02d%02d%02d.dat",
-                 now->tm_tear + 1900, now->tm_mon + 1, now->tm_mday, now->tm_hour, now->tm_min, now->tm_sec);
+                 now->tm_year + 1900, now->tm_mon + 1, now->tm_mday, now->tm_hour, now->tm_min, now->tm_sec);
 
         printf("Listening at SF%i on %.6lf Mhz.\n", sf,(double)freq/1000000);
         printf("------------------\n");

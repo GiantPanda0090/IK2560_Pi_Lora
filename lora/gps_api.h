@@ -5,7 +5,6 @@
 #define GPS_ERR_INITIALIZATION  -2
 #define GPS_ERR_GPSD            -3
 #define GPS_ERR_NO_DATA         -4
-#define 
 
 int gps_start(void);
 int gps_stop(void);
