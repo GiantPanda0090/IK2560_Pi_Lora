@@ -16,6 +16,7 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <time.h>
 
 #include <sys/ioctl.h>
 
@@ -152,6 +153,7 @@ typedef unsigned char byte;
 static const int CHANNEL = 0;
 
 char message[256];
+char filename[256];
 
 bool sx1272 = true;
 
@@ -362,9 +364,9 @@ void receivepacket(double own_lat, double own_lon) {
                 rssicorr = 157;
             }
             RSSI = readReg(0x1B) - rssicorr;
+            pktRSSI = readReg(0x1A)-rssicorr;
 
-            // TODO Do we use packet RSSI or just "RSSI"?
-            printf("Packet RSSI: %d, ", readReg(0x1A)-rssicorr);
+            printf("Packet RSSI: %d, ", pktRSSI);
             printf("RSSI: %d, ", RSSI);
             printf("SNR: %li, ", SNR);
             printf("Length: %i", (int)receivedbytes);
@@ -386,8 +388,12 @@ void receivepacket(double own_lat, double own_lon) {
             printf("Got latitude %f and longitude %f from sender\n", lat, lon);
 
             // TODO specify or generate dynamic file name
-            data = fopen("data.dat", "a");
-            fprintf(data, "%f %f %f %f %d %li\n", own_lat, own_lon, lat, lon, RSSI, SNR);
+            data = fopen(filename, "a");
+            if (data == NULL) {
+                printf("WARNING: opening data file failed with error %d!\n", errno);
+                return;
+            }
+            fprintf(data, "%f %f %f %f %d %d %li\n", own_lat, own_lon, lat, lon, RSSI, pktRSSI, SNR);
             fclose(data);
 
         } // received a message
@@ -455,6 +461,9 @@ void txlora(byte *frame, byte datalen) {
 int main (int argc, char *argv[]) {
     int err;
     double lat, lon;
+    time_t t;
+    struct tm now;
+
     if (argc < 2 || argc != 4 ) {
         printf ("Usage: argv[0] sender|rec [latitude] [longitude]\n");
         printf ("If latitude and longitude is not given, the GPS will be used to dynamically obtain them.\n");
@@ -518,6 +527,16 @@ int main (int argc, char *argv[]) {
         opmodeLora();
         opmode(OPMODE_STANDBY);
         opmode(OPMODE_RX);
+
+        t = time(NULL);
+        now = localtime(&t);
+        if (now == NULL) {
+            printf("ERROR: localtime failed with errno %d\n", errno);
+            exit(errno);
+        }
+        snprintf((char *)filename, sizeof(filename), "data_%04d%02d%02d_%02d%02d%02d.dat",
+                 now->tm_tear + 1900, now->tm_mon + 1, now->tm_mday, now->tm_hour, now->tm_min, now->tm_sec);
+
         printf("Listening at SF%i on %.6lf Mhz.\n", sf,(double)freq/1000000);
         printf("------------------\n");
         while(1) {
