@@ -160,6 +160,8 @@ bool sx1272 = true;
 
 byte receivedbytes;
 
+int pkt_counter = 0;
+
 enum sf_t { SF7=7, SF8, SF9, SF10, SF11, SF12 };
 
 /*******************************************************************************
@@ -370,7 +372,7 @@ void receivepacket(double dist) {
             RSSI = readReg(0x1B) - rssicorr;
             pktRSSI = readReg(0x1A)-rssicorr;
 
-            printf("\n");
+            printf("\n%d:\n", pkt_counter++);
             printf("Packet RSSI: %d, ", pktRSSI);
             printf("RSSI: %d, ", RSSI);
             printf("SNR: %li, ", SNR);
