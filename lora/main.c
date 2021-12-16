@@ -24,6 +24,7 @@
 #include <wiringPiSPI.h>
 
 #include "gps_api.h"
+#include "geo.h"
 
 
 // #############################################
@@ -337,7 +338,7 @@ boolean receive(char *payload, int maxlen) {
     return true;
 }
 
-void receivepacket(double own_lat, double own_lon) {
+void receivepacket(double dist) {
 
     long int SNR;
     int rssicorr, RSSI, pktRSSI;
@@ -380,13 +381,17 @@ void receivepacket(double own_lat, double own_lon) {
             lat = strtod(message, &next);
             if (lat == 0 && errno != 0) {
                 printf("WARNING: bad latitude, strtod returned %d!\n", errno);
-                return;
+                //lat = *last_lat;
+            } else {
+                //*last_lat = lat;
             }
 
             lon = strtod(next, NULL);
             if (lon == 0 && errno != 0) {
-                printf("WARNING: bad longitude, strod returned %d!\n", errno);
-                return;
+                printf("WARNING: bad longitude, strtod returned %d!\n", errno);
+                //lon = *last_lon;
+            } else {
+                //*last_lon = lon;
             }
 
             printf("Got latitude %f and longitude %f from sender\n", lat, lon);
@@ -397,7 +402,8 @@ void receivepacket(double own_lat, double own_lon) {
                 printf("WARNING: opening data file failed with error %d!\n", errno);
                 return;
             }
-            fprintf(data, "%f %f %f %f %d %d %li\n", own_lat, own_lon, lat, lon, RSSI, pktRSSI, SNR);
+            fprintf(data, "%f %d %d %li\n", dist, RSSI, pktRSSI, SNR);
+            //fprintf(data, "%f %f %f %f %d %d %li\n", own_lat, own_lon, lat, lon, RSSI, pktRSSI, SNR);
             fclose(data);
 
         } // received a message
@@ -464,13 +470,16 @@ void txlora(byte *frame, byte datalen) {
 
 int main (int argc, char *argv[]) {
     int err;
-    double lat, lon;
+    double lat, lon, dist;
+    double last_lat = 0.0;
+    double last_lon = 0.0;
     time_t t;
     struct tm *now;
 
-    if (argc != 2 && argc != 4 ) {
-        printf ("Usage: %s sender|rec [latitude] [longitude]\n", argv[0]);
-        printf ("If latitude and longitude is not given, the GPS will be used to dynamically obtain them.\n");
+    if (argc < 2 || argc > 4) {
+        printf ("Usage: %s sender|rec [distance (m)]\n", argv[0]);
+        printf ("or %s sender|rec [latitude] [longitude]\n", argv[0]);
+        printf ("If neither the distance nor latitude and longitude is given, the GPS will be used to dynamically obtain them.\n");
         exit(1);
     }
 
@@ -494,6 +503,14 @@ int main (int argc, char *argv[]) {
 
         printf("using static latitude %f and longitude %f\n", lat, lon);
         snprintf((char *)hello, sizeof(hello), "%f %f", lat, lon);
+    } else if (argc == 3) {
+        dist = strtod(argv[2], NULL);
+        if (errno == ERANGE)
+            die("ERROR: distance could not be interpreted!\n");
+
+        printf("using static distance %f\n", dist);
+        // send the distance twice for redundancy
+        snprintf((char *)hello, sizeof(hello), "%f %f", dist, dist);
     } else {
         err = gps_start();
         if (err != 0) {
@@ -555,8 +572,11 @@ int main (int argc, char *argv[]) {
                     continue;
                 }
                 snprintf((char *)hello, sizeof(hello), "%f %f", lat, lon);
+            } else if (argc == 4) {
+                // TODO Get sender's coordinates and calculate distance
+            } else {
+                receivepacket(dist);
             }
-            receivepacket(lat, lon);
         }
 
     }
