@@ -151,6 +151,14 @@
 typedef bool boolean;
 typedef unsigned char byte;
 
+struct lora_packet {
+    double lat;
+    double lon;
+    long int SNR;
+    int RSSI;
+    int pktRSSI;
+};
+
 static const int CHANNEL = 0;
 
 char message[256];
@@ -160,7 +168,7 @@ bool sx1272 = true;
 
 byte receivedbytes;
 
-int pkt_counter = 0;
+int pkt_counter = 1;
 
 enum sf_t { SF7=7, SF8, SF9, SF10, SF11, SF12 };
 
@@ -340,10 +348,9 @@ boolean receive(char *payload, int maxlen) {
     return true;
 }
 
-void receivepacket(double *lat, double *lon, double *last_lat, double *last_lon) {
+void receivepacket(double *last_lat, double *last_lon, struct lora_packet *pkt) {
 
-    long int SNR;
-    int rssicorr, RSSI, pktRSSI;
+    int rssicorr;
     char *next;
 
     if(digitalRead(dio0) == 1)
@@ -367,34 +374,32 @@ void receivepacket(double *lat, double *lon, double *last_lat, double *last_lon)
             } else {
                 rssicorr = 157;
             }
-            RSSI = readReg(0x1B) - rssicorr;
-            pktRSSI = readReg(0x1A)-rssicorr;
+            pkt->RSSI = readReg(0x1B) - rssicorr;
+            pkt->pktRSSI = readReg(0x1A)-rssicorr;
 
-            printf("\n%d:\n", pkt_counter++);
-            printf("Packet RSSI: %d, ", pktRSSI);
-            printf("RSSI: %d, ", RSSI);
-            printf("SNR: %li, ", SNR);
+            printf("\nNo %d:\n", pkt_counter++);
+            printf("Packet RSSI: %d, ", pkt->pktRSSI);
+            printf("RSSI: %d, ", pkt->RSSI);
+            printf("SNR: %li, ", pkt->SNR);
             printf("Length: %i", (int)receivedbytes);
             printf("\n");
             printf("Payload: %s\n", message);
 
-            *lat = strtod(message, &next);
-            if (*lat == 0 && errno != 0) {
+            pkt->lat = strtod(message, &next);
+            if (pkt->lat == 0 && errno != 0) {
                 printf("WARNING: bad latitude, strtod returned %d!\n", errno);
-                *lat = *last_lat;
+                pkt->lat = *last_lat;
             } else {
-                *last_lat = *lat;
+                *last_lat = pkt->lat;
             }
 
-            *lon = strtod(next, NULL);
-            if (*lon == 0 && errno != 0) {
+            pkt->lon = strtod(next, NULL);
+            if (pkt->lon == 0 && errno != 0) {
                 printf("WARNING: bad longitude, strtod returned %d!\n", errno);
-                *lon = *last_lon;
+                pkt->lon = *last_lon;
             } else {
-                *last_lon = *lon;
+                *last_lon = pkt->lon;
             }
-
-            printf("Got latitude %f and longitude %f from sender\n", *lat, *lon);
 
         } // received a message
 
@@ -460,12 +465,13 @@ void txlora(byte *frame, byte datalen) {
 
 int main (int argc, char *argv[]) {
     int err;
-    double lat, lon, sender_lat, sender_lon, dist;
+    double lat, lon, dist;
     double last_lat = 0.0;
     double last_lon = 0.0;
     time_t t;
     struct tm *now;
     FILE *data;
+    struct lora_packet pkt;
 
     if (argc < 2 || argc > 4) {
         printf ("Usage: %s sender|rec [distance (m)]\n", argv[0]);
@@ -564,9 +570,11 @@ int main (int argc, char *argv[]) {
                 }
             }
 
-            receivepacket(&sender_lat, &sender_lon, &last_lat, &last_lon);
+            receivepacket(&last_lat, &last_lon, &pkt);
+
+            printf("Got latitude %f and longitude %f from sender\n", pkt.lat, pkt.lon);
             if (argc != 3) {
-                dist = geo_distance(lat, lon, sender_lat, sender_lon, 'K');
+                dist = geo_distance(lat, lon, pkt.lat, pkt.lon, 'K');
             }
             printf("Calculated distance is %f\n", dist);
 
@@ -574,11 +582,10 @@ int main (int argc, char *argv[]) {
             if (data == NULL) {
                 printf("WARNING: opening data file failed with error %d!\n", errno);
             } else {
-                fprintf(data, "%f %d %d %li\n", dist, RSSI, pktRSSI, SNR);
+                fprintf(data, "%f %d %d %li\n", dist, pkt.RSSI, pkt.pktRSSI, pkt.SNR);
                 fclose(data);
             }
         }
-
     }
     // Stop the GPS in case it was started
     (void) gps_stop();
