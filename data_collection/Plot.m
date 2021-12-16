@@ -13,16 +13,15 @@ path=double.empty(data_length,0);
 %plot operations
 for i=1:length(files)
     current_file = load(strcat(files(i).folder,'\',files(i).name), '-ascii')
-    longitude=current_file(:,3);
-    latitude=current_file(:,4);
-    initialx = current_file(:,1);
-    initialy = current_file(:,2);
-
-
-    dist = [dist,distance(initialx,initialy,latitude,longitude)]
-    rssi=[rssi,current_file(:,5)];
-    packet_rssi = [packet_rssi,current_file(:,6)];
-    snr=[snr,current_file(:,7)];
+    %longitude=current_file(:,3);
+    %latitude=current_file(:,4);
+    %initialx = current_file(:,1);
+    %initialy = current_file(:,2);
+    dist = current_file(:,1);
+    %dist = [dist,distance(initialx,initialy,latitude,longitude)]
+    rssi=[rssi,current_file(:,2)];
+    packet_rssi = [packet_rssi,current_file(:,3)];
+    snr=[snr,current_file(:,4)];
 end
 packet_rssi_avg= mean(packet_rssi,2)
 rssi_avg= mean(rssi,2)
@@ -85,10 +84,10 @@ figure(2);
 receive_power_lst = transmit_power-Ldb
 rssi_lst = receive_power_lst+gain
 for i=1:data_length
-    cur_path=[init_power;transmit_power;receive_power_lst(i);rssi_lst(i)];
+    cur_path=[init_power;transmit_power;receive_power_lst(i);rssi_lst(i);rssi_lst(i)];
     path = [path,cur_path];
 end
-x_path = {'1 - TX Radio','2 - PA','3 - Path Lost','4 - RSSI'}
+x_path = {'1 - TX Radio','2 - PA TX','3 - Path Lost','4 - PA RX','5 - RSSI'}
 C = categorical(x_path)
 
 plot(C,path)
