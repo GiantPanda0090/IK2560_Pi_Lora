@@ -348,7 +348,7 @@ boolean receive(char *payload, int maxlen) {
     return true;
 }
 
-void receivepacket(double *last_lat, double *last_lon, struct lora_packet *pkt) {
+boolean receivepacket(double *last_lat, double *last_lon, struct lora_packet *pkt) {
 
     int rssicorr;
     char *next;
@@ -400,10 +400,11 @@ void receivepacket(double *last_lat, double *last_lon, struct lora_packet *pkt) 
             } else {
                 *last_lon = pkt->lon;
             }
-
+            return true;
         } // received a message
 
     } // dio0=1
+    return false;
 }
 
 static void configPower (int8_t pw) {
@@ -560,8 +561,7 @@ int main (int argc, char *argv[]) {
         printf("------------------\n");
         while(1) {
             delay(1);
-            // TODO Is it OK if the receiver waits for its own GPS data like this, or
-            // will that make it too inresponsive to GPS data sent from sender?
+            // Getting the GPS position here does not seem to make the receiver irresponsive
             if (argc == 2) {
                 err = gps_get_position(&lat, &lon);
                 if (err != 0) {
@@ -570,20 +570,20 @@ int main (int argc, char *argv[]) {
                 }
             }
 
-            receivepacket(&last_lat, &last_lon, &pkt);
+            if (receivepacket(&last_lat, &last_lon, &pkt)) {
+                printf("Got latitude %f and longitude %f from sender\n", pkt.lat, pkt.lon);
+                if (argc != 3) {
+                    dist = geo_distance(lat, lon, pkt.lat, pkt.lon, 'K') / 1000.0;
+                }
+                printf("Calculated distance is %f meters\n", dist);
 
-            printf("Got latitude %f and longitude %f from sender\n", pkt.lat, pkt.lon);
-            if (argc != 3) {
-                dist = geo_distance(lat, lon, pkt.lat, pkt.lon, 'K');
-            }
-            printf("Calculated distance is %f\n", dist);
-
-            data = fopen(filename, "a");
-            if (data == NULL) {
-                printf("WARNING: opening data file failed with error %d!\n", errno);
-            } else {
-                fprintf(data, "%f %d %d %li\n", dist, pkt.RSSI, pkt.pktRSSI, pkt.SNR);
-                fclose(data);
+                data = fopen(filename, "a");
+                if (data == NULL) {
+                    printf("WARNING: opening data file failed with error %d!\n", errno);
+                } else {
+                    fprintf(data, "%f %d %d %li\n", dist, pkt.RSSI, pkt.pktRSSI, pkt.SNR);
+                    fclose(data);
+                }
             }
         }
     }
