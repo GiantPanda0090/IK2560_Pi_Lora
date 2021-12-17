@@ -404,6 +404,7 @@ boolean receivepacket(double *last_lat, double *last_lon, struct lora_packet *pk
         } // received a message
 
     } // dio0=1
+
     return false;
 }
 
@@ -431,15 +432,15 @@ static void configPower (int8_t pw) {
 }
 
 
-static void writeBuf(byte addr, byte *value, byte len) {                                                       
-    unsigned char spibuf[256];                                                                          
-    spibuf[0] = addr | 0x80;                                                                            
-    for (int i = 0; i < len; i++) {                                                                         
-        spibuf[i + 1] = value[i];                                                                       
-    }                                                                                                   
-    selectreceiver();                                                                                   
-    wiringPiSPIDataRW(CHANNEL, spibuf, len + 1);                                                        
-    unselectreceiver();                                                                                 
+static void writeBuf(byte addr, byte *value, byte len) {
+    unsigned char spibuf[256];
+    spibuf[0] = addr | 0x80;
+    for (int i = 0; i < len; i++) {
+        spibuf[i + 1] = value[i];
+    }
+    selectreceiver();
+    wiringPiSPIDataRW(CHANNEL, spibuf, len + 1);
+    unselectreceiver();
 }
 
 void txlora(byte *frame, byte datalen) {
@@ -573,7 +574,7 @@ int main (int argc, char *argv[]) {
             if (receivepacket(&last_lat, &last_lon, &pkt)) {
                 printf("Got latitude %f and longitude %f from sender\n", pkt.lat, pkt.lon);
                 if (argc != 3) {
-                    dist = geo_distance(lat, lon, pkt.lat, pkt.lon, 'K') / 1000.0;
+                    dist = geo_distance(lat, lon, pkt.lat, pkt.lon, 'K') * 1000.0;
                 }
                 printf("Calculated distance is %f meters\n", dist);
 
