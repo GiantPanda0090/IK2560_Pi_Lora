@@ -184,7 +184,7 @@ int dio0  = 7;
 int RST   = 0;
 
 // Set spreading factor (SF7 - SF12)
-sf_t sf = SF7;
+sf_t sf = SF12;
 
 // Set center frequency
 uint32_t  freq = 868100000; // in Mhz! (868.1)
@@ -361,12 +361,12 @@ void receivepacket(double *last_lat, double *last_lon, struct lora_packet *pkt) 
             {
                 // Invert and divide by 4
                 value = ( ( ~value + 1 ) & 0xFF ) >> 2;
-                SNR = -value;
+                pkt->SNR = -value;
             }
             else
             {
                 // Divide by 4
-                SNR = ( value & 0xFF ) >> 2;
+                pkt->SNR = ( value & 0xFF ) >> 2;
             }
 
             if (sx1272) {
