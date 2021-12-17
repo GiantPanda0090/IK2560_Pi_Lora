@@ -189,7 +189,7 @@ sf_t sf = SF12;
 // Set center frequency
 uint32_t  freq = 868100000; // in Mhz! (868.1)
 
-byte hello[32] = "HELLO";
+byte hello[256] = "HELLO";
 
 void die(const char *s)
 {
@@ -377,14 +377,6 @@ boolean receivepacket(double *last_lat, double *last_lon, struct lora_packet *pk
             pkt->RSSI = readReg(0x1B) - rssicorr;
             pkt->pktRSSI = readReg(0x1A)-rssicorr;
 
-            printf("\nNo %d:\n", pkt_counter++);
-            printf("Packet RSSI: %d, ", pkt->pktRSSI);
-            printf("RSSI: %d, ", pkt->RSSI);
-            printf("SNR: %li, ", pkt->SNR);
-            printf("Length: %i", (int)receivedbytes);
-            printf("\n");
-            printf("Payload: %s\n", message);
-
             pkt->lat = strtod(message, &next);
             if (pkt->lat == 0 && errno != 0) {
                 printf("WARNING: bad latitude, strtod returned %d!\n", errno);
@@ -472,8 +464,12 @@ int main (int argc, char *argv[]) {
     double last_lon = 0.0;
     time_t t;
     struct tm *now;
+    struct tm empty_time;
     FILE *data;
     struct lora_packet pkt;
+
+    // Initialize empty time used when reading the current time fails
+    memset(&empty_time, 0, sizeof(empty_time));
 
     if (argc < 2 || argc > 4) {
         printf ("Usage: %s sender|rec [distance (m)]\n", argv[0]);
@@ -572,17 +568,31 @@ int main (int argc, char *argv[]) {
             }
 
             if (receivepacket(&last_lat, &last_lon, &pkt)) {
-                printf("Got latitude %f and longitude %f from sender\n", pkt.lat, pkt.lon);
+                t = time(NULL);
+                now = localtime(&t);
+                if (now == NULL) {
+                    printf("WARNING: localtime failed with errno %d\n", errno);
+                    now = &empty_time;
+                }
+
                 if (argc != 3) {
                     dist = geo_distance(lat, lon, pkt.lat, pkt.lon, 'K') * 1000.0;
                 }
-                printf("Calculated distance is %f meters\n", dist);
+                printf("\n - No %d at %02d:%02d:%02d -\n", pkt_counter++, now->tm_hour, now->tm_min, now->tm_sec);
+                printf("Packet RSSI: %d, ", pkt.pktRSSI);
+                printf("RSSI: %d, ", pkt.RSSI);
+                printf("SNR: %li, ", pkt.SNR);
+                printf("Length: %i", (int)receivedbytes);
+                printf("\n");
+                printf("Payload: %s\n", message);
+                printf("Latitude: %f, Longitude: %f, Calculated distance: %f\n", pkt.lat, pkt.lon, dist);
 
                 data = fopen(filename, "a");
                 if (data == NULL) {
                     printf("WARNING: opening data file failed with error %d!\n", errno);
                 } else {
-                    fprintf(data, "%f %d %d %li\n", dist, pkt.RSSI, pkt.pktRSSI, pkt.SNR);
+                    fprintf(data, "%f %d %d %li %02d:%02d:%02d\n",
+                            dist, pkt.RSSI, pkt.pktRSSI, pkt.SNR, now->tm_hour, now->tm_min, now->tm_sec);
                     fclose(data);
                 }
             }
