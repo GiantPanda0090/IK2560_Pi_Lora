@@ -151,6 +151,14 @@
 typedef bool boolean;
 typedef unsigned char byte;
 
+struct lora_packet {
+    double lat;
+    double lon;
+    long int SNR;
+    int RSSI;
+    int pktRSSI;
+};
+
 static const int CHANNEL = 0;
 
 char message[256];
@@ -160,7 +168,7 @@ bool sx1272 = true;
 
 byte receivedbytes;
 
-int pkt_counter = 0;
+int pkt_counter = 1;
 
 enum sf_t { SF7=7, SF8, SF9, SF10, SF11, SF12 };
 
@@ -176,12 +184,12 @@ int dio0  = 7;
 int RST   = 0;
 
 // Set spreading factor (SF7 - SF12)
-sf_t sf = SF7;
+sf_t sf = SF12;
 
 // Set center frequency
 uint32_t  freq = 868100000; // in Mhz! (868.1)
 
-byte hello[32] = "HELLO";
+byte hello[256] = "HELLO";
 
 void die(const char *s)
 {
@@ -340,13 +348,10 @@ boolean receive(char *payload, int maxlen) {
     return true;
 }
 
-void receivepacket(double dist) {
+boolean receivepacket(double *last_lat, double *last_lon, struct lora_packet *pkt) {
 
-    long int SNR;
-    int rssicorr, RSSI, pktRSSI;
-    double lat, lon;
+    int rssicorr;
     char *next;
-    FILE *data;
 
     if(digitalRead(dio0) == 1)
     {
@@ -356,12 +361,12 @@ void receivepacket(double dist) {
             {
                 // Invert and divide by 4
                 value = ( ( ~value + 1 ) & 0xFF ) >> 2;
-                SNR = -value;
+                pkt->SNR = -value;
             }
             else
             {
                 // Divide by 4
-                SNR = ( value & 0xFF ) >> 2;
+                pkt->SNR = ( value & 0xFF ) >> 2;
             }
 
             if (sx1272) {
@@ -369,48 +374,30 @@ void receivepacket(double dist) {
             } else {
                 rssicorr = 157;
             }
-            RSSI = readReg(0x1B) - rssicorr;
-            pktRSSI = readReg(0x1A)-rssicorr;
+            pkt->RSSI = readReg(0x1B) - rssicorr;
+            pkt->pktRSSI = readReg(0x1A)-rssicorr;
 
-            printf("\n%d:\n", pkt_counter++);
-            printf("Packet RSSI: %d, ", pktRSSI);
-            printf("RSSI: %d, ", RSSI);
-            printf("SNR: %li, ", SNR);
-            printf("Length: %i", (int)receivedbytes);
-            printf("\n");
-            printf("Payload: %s\n", message);
-
-            lat = strtod(message, &next);
-            if (lat == 0 && errno != 0) {
+            pkt->lat = strtod(message, &next);
+            if (pkt->lat == 0 && errno != 0) {
                 printf("WARNING: bad latitude, strtod returned %d!\n", errno);
-                //lat = *last_lat;
+                pkt->lat = *last_lat;
             } else {
-                //*last_lat = lat;
+                *last_lat = pkt->lat;
             }
 
-            lon = strtod(next, NULL);
-            if (lon == 0 && errno != 0) {
+            pkt->lon = strtod(next, NULL);
+            if (pkt->lon == 0 && errno != 0) {
                 printf("WARNING: bad longitude, strtod returned %d!\n", errno);
-                //lon = *last_lon;
+                pkt->lon = *last_lon;
             } else {
-                //*last_lon = lon;
+                *last_lon = pkt->lon;
             }
-
-            printf("Got latitude %f and longitude %f from sender\n", lat, lon);
-
-            // TODO specify or generate dynamic file name
-            data = fopen(filename, "a");
-            if (data == NULL) {
-                printf("WARNING: opening data file failed with error %d!\n", errno);
-                return;
-            }
-            fprintf(data, "%f %d %d %li\n", dist, RSSI, pktRSSI, SNR);
-            //fprintf(data, "%f %f %f %f %d %d %li\n", own_lat, own_lon, lat, lon, RSSI, pktRSSI, SNR);
-            fclose(data);
-
+            return true;
         } // received a message
 
     } // dio0=1
+
+    return false;
 }
 
 static void configPower (int8_t pw) {
@@ -437,15 +424,15 @@ static void configPower (int8_t pw) {
 }
 
 
-static void writeBuf(byte addr, byte *value, byte len) {                                                       
-    unsigned char spibuf[256];                                                                          
-    spibuf[0] = addr | 0x80;                                                                            
-    for (int i = 0; i < len; i++) {                                                                         
-        spibuf[i + 1] = value[i];                                                                       
-    }                                                                                                   
-    selectreceiver();                                                                                   
-    wiringPiSPIDataRW(CHANNEL, spibuf, len + 1);                                                        
-    unselectreceiver();                                                                                 
+static void writeBuf(byte addr, byte *value, byte len) {
+    unsigned char spibuf[256];
+    spibuf[0] = addr | 0x80;
+    for (int i = 0; i < len; i++) {
+        spibuf[i + 1] = value[i];
+    }
+    selectreceiver();
+    wiringPiSPIDataRW(CHANNEL, spibuf, len + 1);
+    unselectreceiver();
 }
 
 void txlora(byte *frame, byte datalen) {
@@ -477,6 +464,12 @@ int main (int argc, char *argv[]) {
     double last_lon = 0.0;
     time_t t;
     struct tm *now;
+    struct tm empty_time;
+    FILE *data;
+    struct lora_packet pkt;
+
+    // Initialize empty time used when reading the current time fails
+    memset(&empty_time, 0, sizeof(empty_time));
 
     if (argc < 2 || argc > 4) {
         printf ("Usage: %s sender|rec [distance (m)]\n", argv[0]);
@@ -565,22 +558,45 @@ int main (int argc, char *argv[]) {
         printf("------------------\n");
         while(1) {
             delay(1);
-            // TODO Is it OK if the receiver waits for its own GPS data like this, or
-            // will that make it too inresponsive to GPS data sent from sender?
+            // Getting the GPS position here does not seem to make the receiver irresponsive
             if (argc == 2) {
                 err = gps_get_position(&lat, &lon);
                 if (err != 0) {
                     printf("ERROR: gps_get_position returned %d\n", err);
                     continue;
                 }
-                snprintf((char *)hello, sizeof(hello), "%f %f", lat, lon);
-            } else if (argc == 4) {
-                // TODO Get sender's coordinates and calculate distance
-            } else {
-                receivepacket(dist);
+            }
+
+            if (receivepacket(&last_lat, &last_lon, &pkt)) {
+                t = time(NULL);
+                now = localtime(&t);
+                if (now == NULL) {
+                    printf("WARNING: localtime failed with errno %d\n", errno);
+                    now = &empty_time;
+                }
+
+                if (argc != 3) {
+                    dist = geo_distance(lat, lon, pkt.lat, pkt.lon, 'K') * 1000.0;
+                }
+                printf("\n - No %d at %02d:%02d:%02d -\n", pkt_counter++, now->tm_hour, now->tm_min, now->tm_sec);
+                printf("Packet RSSI: %d, ", pkt.pktRSSI);
+                printf("RSSI: %d, ", pkt.RSSI);
+                printf("SNR: %li, ", pkt.SNR);
+                printf("Length: %i", (int)receivedbytes);
+                printf("\n");
+                printf("Payload: %s\n", message);
+                printf("Latitude: %f, Longitude: %f, Calculated distance: %f\n", pkt.lat, pkt.lon, dist);
+
+                data = fopen(filename, "a");
+                if (data == NULL) {
+                    printf("WARNING: opening data file failed with error %d!\n", errno);
+                } else {
+                    fprintf(data, "%f %d %d %li %02d:%02d:%02d\n",
+                            dist, pkt.RSSI, pkt.pktRSSI, pkt.SNR, now->tm_hour, now->tm_min, now->tm_sec);
+                    fclose(data);
+                }
             }
         }
-
     }
     // Stop the GPS in case it was started
     (void) gps_stop();
