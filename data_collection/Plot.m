@@ -17,109 +17,145 @@ dist=data_table(:,1)
 rssi=data_table(:,2)
 packet_rssi = data_table(:,3)
 snr = data_table(:,4)
-%A = unique(table(dist,rssi,packet_rssi,snr))
-%uni_dist = unique(A.dist)
-
-%Delete Min Max
-[ii,jj,kk]=unique(data_table(:,1))
-distance_avg = ii
-rssi_max = [ii accumarray(kk,data_table(:,2),[],@max)]
-rssi_min = [ii accumarray(kk,data_table(:,2),[],@min)]
-rssi_min_lst = find(data_table(:,1)==rssi_min(kk,1) & data_table(:,2)==rssi_min(kk,2))
-rssi_max_lst = find(data_table(:,1)==rssi_max(kk,1) & data_table(:,2)==rssi_max(kk,2))
-lst = [rssi_min_lst;rssi_max_lst]
-data_table(lst,:)=[]
-[ii,jj,kk]=unique(data_table(:,1))
-distance_avg = ii
-prssi_max = [ii accumarray(kk,data_table(:,3),[],@max)]
-prssi_min = [ii accumarray(kk,data_table(:,3),[],@min)]
-prssi_min_lst = find(data_table(:,1)==prssi_min(kk,1) & data_table(:,3)==prssi_min(kk,2))
-prssi_max_lst = find(data_table(:,1)==prssi_max(kk,1) & data_table(:,3)==prssi_max(kk,2))
-lst = [prssi_min_lst;prssi_max_lst]
-data_table(lst,:)=[]
 
 %load expierment data
 [ii,jj,kk]=unique(data_table(:,1))
 distance_avg = ii
 rssi_avg=[ii accumarray(kk,data_table(:,2),[],@mean)]
 rssi_avg=rssi_avg(:,2)
-lower=[ii accumarray(kk,data_table(:,2),[], @(x) quantile(x,.05))]
-upper=[ii accumarray(kk,data_table(:,2),[], @(x) quantile(x,.95))]
-lower_rssi=lower(:,2)
-upper_rssi=upper(:,2)
 packet_rssi_avg=[ii accumarray(kk,data_table(:,3),[],@mean)]
 packet_rssi_avg=packet_rssi_avg(:,2)
-lower=[ii accumarray(kk,data_table(:,3),[], @(x) quantile(x,.05))]
-upper=[ii accumarray(kk,data_table(:,3),[], @(x) quantile(x,.95))]
-lower_prssi=lower(:,2)
-upper_prssi=upper(:,2)
 snr_avg=[ii accumarray(kk,data_table(:,4),[],@mean)]
 snr_avg=snr_avg(:,2)
 
+%confidence interval
+CI_rssi=double.empty(1,0);
+CI_prssi=double.empty(1,0);
+packet_count=double.empty(1,0);
+for i=1:length(ii)
+    section_ind = find(data_table(:,1)==ii(i))
+    section = data_table(section_ind,:)
+    packet_count = [packet_count,length(section)]
+    N = size(section,1)
+    ySEM = std(section)/sqrt(N); 
+    CI95 = tinv([0.025 0.975], N-1); 
+    yCI95 = bsxfun(@times, ySEM, CI95(:)); 
+    CI_rssi = [CI_rssi,yCI95(:,2)]
+    CI_prssi = [CI_prssi,yCI95(:,3)]
+end
 lowerthanzero = find(snr_avg<0);
 upperthanzero = find(snr_avg>0);
-CI95_lower=double.empty(1,0);
-CI95_upper=double.empty(1,0);
+CI95=double.empty(2,0);
 
-for i=1:length(lower_prssi)
+for i=1:length(CI_rssi)
     if ismember(i,lowerthanzero)
-        CI95_lower = [CI95_lower;lower_prssi(i)]
-        CI95_upper = [CI95_upper;upper_prssi(i)]
+        CI95 = [CI95,CI_rssi(:,i)]
     else
-       CI95_lower = [CI95_lower;lower_rssi(i)]
-       CI95_upper = [CI95_upper;upper_rssi(i)]
+       CI95 = [CI95,CI_prssi(:,i)]
     end
 end
 
+% Put SNR into the consideration
+packet_strength=double.empty(1,0);
+for i=1:length(snr_avg)
+    if snr_avg(i) < 0
+        packet_strength= [packet_strength;packet_rssi_avg(i) + snr_avg(i) * 0.25]
+    else 
+        packet_strength= [packet_strength;rssi_avg(i)]
+    end
 
-if snr_avg < 0
-    packet_strength= packet_rssi_avg + snr_avg * 0.25
-else 
-    packet_strength= rssi_avg
 end
 
+%Graphing
+
+%Power over Distance
 figure(1);
 avg_power = packet_strength
 xdata = distance_avg(:)
 ydata = avg_power
-err = CI95_upper - CI95_lower
-errorbar(xdata,ydata,err)
-set(gca,'YScale','log')
-set(gca,'XScale','log')
+plot(xdata,ydata,'-o')
 
-
+%set(gca,'YScale','log')
+%set(gca,'XScale','log')
+hold on
+patch([xdata', fliplr(xdata')], [ydata'+CI95(1,:) fliplr(ydata'+CI95(2,:))], 'b', 'EdgeColor','none', 'FaceAlpha',0.25)
 
 cf = fit(xdata,ydata,'poly2'); 
-hold on
 plot(cf,'--')
+
+hold off
+grid
+
 legend('Power','Best Fit')
 xlabel('Distance(m)'), ylabel('Power(dbm)')
-title('Power Against Distance (Log Scale)')
-
+title('Power Over Distance')
 out = gca;
 exportgraphics(out,'result/graph/distance_power.png','Resolution',500)
 
+%Power Over Distance (Log)
 figure(2);
+avg_power = packet_strength
+xdata = distance_avg(:)
+ydata = avg_power
+plot(xdata,ydata,'-o')
+
+set(gca,'YScale','log')
+set(gca,'XScale','log')
+
+hold on
+cf = fit(xdata,ydata,'poly2'); 
+plot(cf,'--')
+
+hold off
+grid
+legend('Power','Best Fit')
+xlabel('Distance(m)'), ylabel('Power(dbm)')
+title('Power Over Distance (Log Scale)')
+out = gca;
+exportgraphics(out,'result/graph/distance_power_log.png','Resolution',500)
+
+%SNR over Distance
+figure(3);
+xdata = distance_avg(:)
+ydata = snr_avg
+plot(xdata,ydata,'-o')
+
+%set(gca,'YScale','log')
+%set(gca,'XScale','log')
+
+hold on
+cf = fit(xdata,ydata,'poly2'); 
+plot(cf,'--')
+
+hold off
+grid
+legend('SNR','Best Fit')
+xlabel('Distance(m)'), ylabel('SNR(dbm)')
+title('SNR Over Distance')
+out = gca;
+exportgraphics(out,'result/graph/distance_snr_log.png','Resolution',500)
+
+%Path Lost Over Distance(Log Scale)
 %RSSI(avg_power) = init_power +gain − Ldb +gain dBm.
 %Ldb = init_power +gain -RSSI(avg_power)+gain 
+figure(4);
 init_power = 13
 gain = 17
 transmit_power = init_power+(gain+2.51)
 Ldb = transmit_power - avg_power-(gain+2.51)
-errorbar(xdata,Ldb,err)
+plot(xdata,Ldb)
 set(gca,'YScale','log')
 set(gca,'XScale','log')
 
 myfittype = fittype('a +10*n*log10(d*10^3) -b',...
     'dependent',{'y'},'independent',{'d'},...
     'coefficients',{'a','n','b'})
-cf = fit(xdata,Ldb,myfittype); 
+cf = fit(xdata,Ldb,'poly2'); 
 hold on
 plot(cf,'--')
-legend('Path Lost','Best Fit')
+legend('Path Loss','Best Fit')
 xlabel('Distance(m)'), ylabel('Power(dbm)')
-title('Path Lost Against Distance(Log Scale)')
-
+title('Path Lost Over Distance(Log Scale)')
 
 out = gca;
 exportgraphics(out,'result/graph/distance_path_lost.png','Resolution',500)
@@ -128,27 +164,28 @@ exportgraphics(out,'result/graph/distance_path_lost.png','Resolution',500)
 %n = (20*log(f)-147.58 - Ldb)/10 /log(distance)
 f =  868.1*10^6
 syms n
-for i=1:length(distance_avg)
-eqn = 20*log10(f)+10*n*log10(distance_avg(i)) + -147.58 == Ldb(i)
-N_division = solve(eqn,n)
-%N=vpa(N_division,2)
-n_list = [n_list;N_division]
+for i=2:length(distance_avg)
+    eqn = 20*log10(f)+10*n*log10(distance_avg(i)) + -147.58 == Ldb(i)
+    N_division = solve(eqn,n)
+    n_list = [n_list;N_division]
 end
 n_list=vpa(n_list,2)
 
 n_avg= mean(n_list,1)
-
-print_data=table(distance_avg,n_list)
+print_distance_avg=distance_avg
+print_distance_avg(1)=[]
+print_data=table(print_distance_avg,n_list)
 
 %write result to file
 fileID = fopen('result/output/n.txt','w');
 fprintf(fileID,'%6s %6s\n','distance_avg','n_avg');
-fprintf(fileID,'%d %10f\n',[print_data.distance_avg,print_data.n_list]);
+fprintf(fileID,'%d %10f\n',[print_data.print_distance_avg,print_data.n_list]);
 fprintf(fileID,'\nn = %2.2f \n',n_avg)
 fprintf(fileID,'Path Loss Model: Ldb = 20*log(f)+10*%0.2f*log(d) + -147.58   \n',n_avg);
 fclose(fileID);
 
-figure(3);
+%Power Development
+figure(5);
 receive_power_lst = transmit_power-Ldb
 rssi_lst = receive_power_lst+gain
 for i=1:length(rssi_avg)
