@@ -86,7 +86,7 @@ plot(cf,'--')
 hold off
 grid
 
-legend('Power','Best Fit')
+legend('Power','Confidence Interval','Best Fit')
 xlabel('Distance(m)'), ylabel('Power(dbm)')
 title('Power Over Distance')
 out = gca;
@@ -188,16 +188,19 @@ fclose(fileID);
 figure(5);
 receive_power_lst = transmit_power-Ldb
 rssi_lst = receive_power_lst+gain
+antenna_gain = transmit_power+2.15 
 for i=1:length(rssi_avg)
-    cur_path=[init_power;transmit_power;transmit_power+2.15;receive_power_lst(i);receive_power_lst(i)+2.15;rssi_lst(i);rssi_lst(i)];
+    cur_path=[init_power;transmit_power;antenna_gain;antenna_gain-22.85;receive_power_lst(i);receive_power_lst(i)+2.15;rssi_lst(i);rssi_lst(i)];
     path = [path,cur_path];
 end
-x_path = {'1 - TX Radio','2 - PA TX','3 - Antenna Gain RX','4 - Path Loss','5 - Antenna Gain RX','6 - PA RX','7 - RSSI'}
+x_path = {'1 - TX Radio','2 - PA TX','3 - Antenna Gain RX','4 - Attenuation(Brick 267mm)','5 - Path Loss','6 - Antenna Gain RX','7 - PA RX','8 - RSSI'}
 C = categorical(x_path)
 
 plot(C,path)
 legendCell = cellstr(num2str(xdata, '%0.1d'));
-legend(legendCell)
+lgd = legend(legendCell)
+lgd.NumColumns = 3;
+
 xlabel('Stage of the Transmission'), ylabel('Power(dbm)')
 title('Power Development Along the Radio Path Per Distance Unit')
 out = gca;
