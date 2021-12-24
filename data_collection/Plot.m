@@ -130,7 +130,7 @@ plot(cf,'--')
 hold off
 grid
 legend('SNR','Best Fit')
-xlabel('Distance(m)'), ylabel('SNR(dbm)')
+xlabel('Distance(m)'), ylabel('SNR(db)')
 title('SNR Over Distance')
 out = gca;
 exportgraphics(out,'result/graph/distance_snr_log.png','Resolution',500)
