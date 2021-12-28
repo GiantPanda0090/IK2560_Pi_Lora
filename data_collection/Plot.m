@@ -160,6 +160,27 @@ title('Path Lost Over Distance(Log Scale)')
 out = gca;
 exportgraphics(out,'result/graph/distance_path_lost.png','Resolution',500)
 
+%Link Budget(Log Scale)
+figure(5);
+init_power = 13
+transmit_power = init_power
+received_power = avg_power
+link_budget = received_power - transmit_power 
+plot(xdata,link_budget)
+set(gca,'YScale','log')
+set(gca,'XScale','log')
+
+cf = fit(xdata,link_budget,'poly2'); 
+hold on
+plot(cf,'--')
+legend('Link Budget','Best Fit')
+xlabel('Distance(m)'), ylabel('Power(dbm)')
+title('Link Budget(Log Scale)')
+
+out = gca;
+exportgraphics(out,'result/graph/link_budget.png','Resolution',500)
+
+
 %Equition Solver for N
 %n = (20*log(f)-147.58 - Ldb)/10 /log(distance)
 f =  868.1*10^6
@@ -185,7 +206,7 @@ fprintf(fileID,'Path Loss Model: Ldb = 20*log(f)+10*%0.2f*log(d) + -147.58   \n'
 fclose(fileID);
 
 %Power Development
-figure(5);
+figure(6);
 receive_power_lst = transmit_power-Ldb
 rssi_lst = receive_power_lst+gain
 antenna_gain = transmit_power+2.15 
