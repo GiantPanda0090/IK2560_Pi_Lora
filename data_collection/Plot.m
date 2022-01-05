@@ -80,7 +80,7 @@ plot(xdata,ydata,'-o')
 hold on
 patch([xdata', fliplr(xdata')], [ydata'+CI95(1,:) fliplr(ydata'+CI95(2,:))], 'b', 'EdgeColor','none', 'FaceAlpha',0.25)
 
-cf = fit(xdata,ydata,'poly2'); 
+cf = fit(xdata,ydata,'exp2'); 
 plot(cf,'--')
 
 hold off
@@ -99,14 +99,13 @@ xdata = distance_avg(:)
 ydata = avg_power
 plot(xdata,ydata,'-o')
 
+%hold on
+%cf = fit(xdata,ydata,'poly2'); 
+%plot(cf,'--')
+%hold off
+
 set(gca,'YScale','log')
 set(gca,'XScale','log')
-
-hold on
-cf = fit(xdata,ydata,'poly2'); 
-plot(cf,'--')
-
-hold off
 grid
 legend('Power','Best Fit')
 xlabel('Distance(m)'), ylabel('Power(dbm)')
@@ -124,7 +123,7 @@ plot(xdata,ydata,'-o')
 %set(gca,'XScale','log')
 
 hold on
-cf = fit(xdata,ydata,'poly2'); 
+cf = fit(xdata,ydata,'exp2'); 
 plot(cf,'--')
 
 hold off
@@ -135,27 +134,24 @@ title('SNR Over Distance')
 out = gca;
 exportgraphics(out,'result/graph/distance_snr_log.png','Resolution',500)
 
-%Path Lost Over Distance(Log Scale)
+%Path Lost Over Distance
 %RSSI(avg_power) = init_power +gain − Ldb +gain dBm.
 %Ldb = init_power +gain -RSSI(avg_power)+gain 
 figure(4);
 init_power = 13
 gain = 17
 transmit_power = init_power+(gain+2.51)
-Ldb = transmit_power - avg_power-(gain+2.51)
+Ldb = transmit_power - avg_power-(gain+2.51)-34.8
 plot(xdata,Ldb)
-set(gca,'YScale','log')
-set(gca,'XScale','log')
+%set(gca,'YScale','log')
+%set(gca,'XScale','log')
 
-myfittype = fittype('a +10*n*log10(d*10^3) -b',...
-    'dependent',{'y'},'independent',{'d'},...
-    'coefficients',{'a','n','b'})
-cf = fit(xdata,Ldb,'poly2'); 
+cf = fit(xdata,Ldb,'exp2'); 
 hold on
 plot(cf,'--')
 legend('Path Loss','Best Fit')
 xlabel('Distance(m)'), ylabel('Power(dbm)')
-title('Path Lost Over Distance(Log Scale)')
+title('Path Lost Over Distance')
 
 out = gca;
 exportgraphics(out,'result/graph/distance_path_lost.png','Resolution',500)
@@ -167,15 +163,15 @@ transmit_power = init_power
 received_power = avg_power
 link_budget = received_power - transmit_power 
 plot(xdata,link_budget)
-set(gca,'YScale','log')
-set(gca,'XScale','log')
+%set(gca,'YScale','log')
+%set(gca,'XScale','log')
 
-cf = fit(xdata,link_budget,'poly2'); 
+cf = fit(xdata,link_budget,'exp2'); 
 hold on
 plot(cf,'--')
 legend('Link Budget','Best Fit')
 xlabel('Distance(m)'), ylabel('Power(dbm)')
-title('Link Budget(Log Scale)')
+title('Link Budget')
 
 out = gca;
 exportgraphics(out,'result/graph/link_budget.png','Resolution',500)
@@ -184,17 +180,17 @@ exportgraphics(out,'result/graph/link_budget.png','Resolution',500)
 %Equition Solver for N
 %n = (20*log(f)-147.58 - Ldb)/10 /log(distance)
 f =  868.1*10^6
+C = 20*log10(f)-147.56
 syms n
-for i=2:length(distance_avg)
-    eqn = 20*log10(f)+10*n*log10(distance_avg(i)) + -147.58 == Ldb(i)
+for i=1:length(distance_avg)
+    eqn = 10*n*log10(distance_avg(i))+C == Ldb(i)
     N_division = solve(eqn,n)
     n_list = [n_list;N_division]
 end
-n_list=vpa(n_list,2)
-
+n_list=vpa(n_list,3)
 n_avg= mean(n_list,1)
+
 print_distance_avg=distance_avg
-print_distance_avg(1)=[]
 print_data=table(print_distance_avg,n_list)
 
 %write result to file
@@ -211,7 +207,7 @@ receive_power_lst = transmit_power-Ldb
 rssi_lst = receive_power_lst+gain
 antenna_gain = transmit_power+2.15 
 for i=1:length(rssi_avg)
-    cur_path=[init_power;transmit_power;antenna_gain;antenna_gain-22.85;receive_power_lst(i);receive_power_lst(i)+2.15;rssi_lst(i);rssi_lst(i)];
+    cur_path=[init_power;transmit_power;antenna_gain;antenna_gain-34.8;receive_power_lst(i);receive_power_lst(i)+2.15;rssi_lst(i);rssi_lst(i)];
     path = [path,cur_path];
 end
 x_path = {'1 - TX Radio','2 - PA TX','3 - Antenna Gain RX','4 - Attenuation(Brick 267mm)','5 - Path Loss','6 - Antenna Gain RX','7 - PA RX','8 - RSSI'}
