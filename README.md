@@ -20,11 +20,23 @@ make
 ```sh
 sudo gpsd /dev/ttyS0 -F /var/run/gpsd.sock
 ```
-5. Start testbench in sender or receiver mode
+5. Start testbench in sender mode (with GPS)
 ```sh
 ./lora_test sender
 ```
-or
+Start testbench in receiver mode (with GPS)
 ```sh
-lora_test rec
+./lora_test rec
 ```
+Start testbench without GPS (using a static distance of 15 m)
+```sh
+./lora_test sender|rec 15.0
+```
+Start testbench without GPS (using a static laititude of 59.404550 and static longitude of 17.950181)
+```sh
+./lora_test sender|rec 59.404550 17.950181
+```
+When the GPS is in use or when using static coordinates, the receiver will use the latitude and
+longitude sent by the transmitter along with its own latitude and longitude to calculate the distance
+to the transmitter. If the receiver is configured to use a static distance, it will ignore the distance
+or coordinates sent by the receiver.
